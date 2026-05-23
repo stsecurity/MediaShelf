@@ -74,6 +74,16 @@ $isEdit = $id > 0;
 $title = $isEdit ? 'Edit Work' : 'Add Work';
 $formUrl = Admin::tokenUrl(Admin::panelUrl('MediaShelf/admin/edit.php', $isEdit ? ['id' => $id] : []));
 $listUrl = Admin::panelUrl('MediaShelf/admin/list.php');
+$relatedFilters = [
+    'type' => (string) Admin::query('post_type', 'post'),
+    'category' => (int) Admin::query('post_category', 0),
+    'search' => trim((string) Admin::query('post_search', '')),
+];
+$selectedPostCid = (int) mediashelf_edit_field($work, 'blog_cid', 0);
+$relatedPosts = $repository->relatedPostOptions($relatedFilters, $selectedPostCid);
+$relatedCategories = $repository->relatedPostCategories();
+$selectedPostPreview = $repository->blogPreview($selectedPostCid);
+$relatedFilterBaseUrl = Admin::panelUrl('MediaShelf/admin/edit.php', $isEdit ? ['id' => $id] : []);
 
 function mediashelf_edit_work_from_post($id)
 {
@@ -186,6 +196,55 @@ include 'menu.php';
 .mediashelf-edit-message p {
     margin: 0;
 }
+
+.mediashelf-related-filters {
+    align-items: end;
+    display: grid;
+    gap: 10px;
+    grid-template-columns: 140px 180px minmax(180px, 1fr) auto auto;
+    margin: 0 0 10px;
+}
+
+.mediashelf-related-filters label {
+    display: grid;
+    gap: 5px;
+}
+
+.mediashelf-related-filters input,
+.mediashelf-related-filters select,
+.mediashelf-related-select {
+    box-sizing: border-box;
+    max-width: none;
+    width: 100%;
+}
+
+.mediashelf-related-preview {
+    border: 1px solid #d9d9d6;
+    box-sizing: border-box;
+    margin-top: 10px;
+    padding: 12px;
+}
+
+.mediashelf-related-preview.is-empty {
+    color: #999;
+}
+
+.mediashelf-related-preview-title {
+    font-weight: 600;
+    margin: 0 0 6px;
+}
+
+.mediashelf-related-preview-meta,
+.mediashelf-related-preview-excerpt {
+    color: #777;
+    margin: 0 0 6px;
+}
+
+@media (max-width: 760px) {
+    .mediashelf-related-filters {
+        grid-template-columns: 1fr;
+    }
+}
 </style>
 
 <div class="main">
@@ -271,8 +330,63 @@ include 'menu.php';
                     <p class="description">Separate tags with commas or new lines.</p>
                 </li>
                 <li>
-                    <label class="typecho-label" for="blog_cid">Related Typecho Post ID</label>
-                    <input id="blog_cid" name="blog_cid" type="number" min="1" class="text" value="<?php echo Admin::h(mediashelf_edit_field($work, 'blog_cid')); ?>" />
+                    <label class="typecho-label" for="blog_cid">Related Typecho Post</label>
+                    <div class="mediashelf-related-filters" data-filter-base="<?php echo Admin::h($relatedFilterBaseUrl); ?>">
+                        <label>
+                            Archive
+                            <select id="post_type_filter">
+                                <option value="post" <?php if ($relatedFilters['type'] === 'post') echo 'selected'; ?>>Posts</option>
+                                <option value="page" <?php if ($relatedFilters['type'] === 'page') echo 'selected'; ?>>Pages</option>
+                                <option value="all" <?php if ($relatedFilters['type'] === 'all') echo 'selected'; ?>>Posts and pages</option>
+                            </select>
+                        </label>
+                        <label>
+                            Category
+                            <select id="post_category_filter">
+                                <option value="0">All categories</option>
+                                <?php foreach ($relatedCategories as $category): ?>
+                                    <option value="<?php echo Admin::h($category['mid']); ?>" <?php if ((int) $relatedFilters['category'] === (int) $category['mid']) echo 'selected'; ?>>
+                                        <?php echo Admin::h($category['name']); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </label>
+                        <label>
+                            Search title
+                            <input id="post_search_filter" type="search" class="text" value="<?php echo Admin::h($relatedFilters['search']); ?>" />
+                        </label>
+                        <button type="button" class="btn primary" id="mediashelf_post_filter">Filter</button>
+                        <button type="button" class="btn" id="mediashelf_post_filter_reset">Reset</button>
+                    </div>
+                    <select id="blog_cid" name="blog_cid" class="mediashelf-related-select">
+                        <option value="">No related post</option>
+                        <?php foreach ($relatedPosts as $post): ?>
+                            <option
+                                value="<?php echo Admin::h($post['cid']); ?>"
+                                data-title="<?php echo Admin::h($post['title']); ?>"
+                                data-type="<?php echo Admin::h($post['type']); ?>"
+                                data-created="<?php echo Admin::h($post['created'] ? date('Y-m-d', $post['created']) : ''); ?>"
+                                data-url="<?php echo Admin::h($post['url']); ?>"
+                                data-excerpt="<?php echo Admin::h($post['excerpt']); ?>"
+                                <?php if ($selectedPostCid === (int) $post['cid']) echo 'selected'; ?>
+                            >
+                                <?php echo Admin::h('#' . $post['cid'] . ' [' . $post['type'] . '] ' . $post['title']); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <div class="mediashelf-related-preview<?php if (!$selectedPostPreview) echo ' is-empty'; ?>" id="mediashelf_related_preview">
+                        <?php if ($selectedPostPreview): ?>
+                            <p class="mediashelf-related-preview-title"><?php echo Admin::h($selectedPostPreview['title']); ?></p>
+                            <?php if ($selectedPostPreview['url']): ?>
+                                <p class="mediashelf-related-preview-meta"><a href="<?php echo Admin::h($selectedPostPreview['url']); ?>" target="_blank" rel="noopener noreferrer">Open post preview</a></p>
+                            <?php endif; ?>
+                            <?php if ($selectedPostPreview['excerpt']): ?>
+                                <p class="mediashelf-related-preview-excerpt"><?php echo Admin::h($selectedPostPreview['excerpt']); ?></p>
+                            <?php endif; ?>
+                        <?php else: ?>
+                            No related post selected.
+                        <?php endif; ?>
+                    </div>
                 </li>
                 <li>
                     <label class="typecho-label" for="blog_url">Manual Blog URL</label>
@@ -311,5 +425,98 @@ include 'menu.php';
 <?php
 include 'copyright.php';
 include 'common-js.php';
+?>
+<script>
+(function () {
+    var filterButton = document.getElementById('mediashelf_post_filter');
+    var resetButton = document.getElementById('mediashelf_post_filter_reset');
+    var filterWrap = document.querySelector('.mediashelf-related-filters');
+    var select = document.getElementById('blog_cid');
+    var preview = document.getElementById('mediashelf_related_preview');
+
+    function filterUrl(reset) {
+        var url = new URL(filterWrap.getAttribute('data-filter-base'), window.location.href);
+        if (!reset) {
+            url.searchParams.set('post_type', document.getElementById('post_type_filter').value);
+            url.searchParams.set('post_category', document.getElementById('post_category_filter').value);
+            url.searchParams.set('post_search', document.getElementById('post_search_filter').value);
+        } else {
+            url.searchParams.delete('post_type');
+            url.searchParams.delete('post_category');
+            url.searchParams.delete('post_search');
+        }
+
+        return url.toString();
+    }
+
+    function text(value) {
+        return value || '';
+    }
+
+    function renderPreview() {
+        var option = select.options[select.selectedIndex];
+        if (!option || !option.value) {
+            preview.className = 'mediashelf-related-preview is-empty';
+            preview.textContent = 'No related post selected.';
+            return;
+        }
+
+        var title = text(option.getAttribute('data-title'));
+        var type = text(option.getAttribute('data-type'));
+        var created = text(option.getAttribute('data-created'));
+        var url = text(option.getAttribute('data-url'));
+        var excerpt = text(option.getAttribute('data-excerpt'));
+
+        preview.className = 'mediashelf-related-preview';
+        preview.innerHTML = '';
+
+        var titleNode = document.createElement('p');
+        titleNode.className = 'mediashelf-related-preview-title';
+        titleNode.textContent = title;
+        preview.appendChild(titleNode);
+
+        var metaNode = document.createElement('p');
+        metaNode.className = 'mediashelf-related-preview-meta';
+        metaNode.textContent = [type, created].filter(Boolean).join(' - ');
+        preview.appendChild(metaNode);
+
+        if (url) {
+            var linkNode = document.createElement('p');
+            linkNode.className = 'mediashelf-related-preview-meta';
+            var link = document.createElement('a');
+            link.href = url;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            link.textContent = 'Open post preview';
+            linkNode.appendChild(link);
+            preview.appendChild(linkNode);
+        }
+
+        if (excerpt) {
+            var excerptNode = document.createElement('p');
+            excerptNode.className = 'mediashelf-related-preview-excerpt';
+            excerptNode.textContent = excerpt;
+            preview.appendChild(excerptNode);
+        }
+    }
+
+    if (filterButton && filterWrap) {
+        filterButton.addEventListener('click', function () {
+            window.location.href = filterUrl(false);
+        });
+    }
+
+    if (resetButton && filterWrap) {
+        resetButton.addEventListener('click', function () {
+            window.location.href = filterUrl(true);
+        });
+    }
+
+    if (select && preview) {
+        select.addEventListener('change', renderPreview);
+    }
+})();
+</script>
+<?php
 include 'footer.php';
 ?>

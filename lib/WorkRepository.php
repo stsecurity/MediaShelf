@@ -161,6 +161,93 @@ class WorkRepository
         ];
     }
 
+    public function relatedPostOptions(array $filters = [], $selectedCid = 0)
+    {
+        $db = Database::db();
+        $type = isset($filters['type']) ? (string) $filters['type'] : 'post';
+        $category = isset($filters['category']) ? (int) $filters['category'] : 0;
+        $search = trim((string) (isset($filters['search']) ? $filters['search'] : ''));
+
+        if (!in_array($type, ['post', 'page', 'all'], true)) {
+            $type = 'post';
+        }
+
+        $cids = [];
+        if ($category > 0) {
+            $rows = $db->fetchAll($db->select('cid')
+                ->from('table.relationships')
+                ->where('mid = ?', $category));
+            foreach ($rows as $row) {
+                $cids[] = (int) $row['cid'];
+            }
+
+            if (!$cids) {
+                return $selectedCid > 0 ? $this->selectedRelatedPostOnly($selectedCid) : [];
+            }
+        }
+
+        $select = $db->select('cid', 'title', 'slug', 'type', 'text', 'created')
+            ->from('table.contents')
+            ->where('status = ?', 'publish');
+
+        if ($type === 'all') {
+            $select->where('type IN ?', ['post', 'page']);
+        } else {
+            $select->where('type = ?', $type);
+        }
+
+        if ($search !== '') {
+            $select->where('title LIKE ?', '%' . $search . '%');
+        }
+
+        if ($cids) {
+            $select->where('cid IN ?', $cids);
+        }
+
+        $select->order('created', 'DESC')->limit(80);
+        $rows = $db->fetchAll($select);
+
+        if ($selectedCid > 0 && !$this->rowListHasCid($rows, $selectedCid)) {
+            $selected = $this->selectedRelatedPostOnly($selectedCid);
+            if ($selected) {
+                $rows = array_merge($selected, $rows);
+            }
+        }
+
+        return array_map([$this, 'relatedPostOption'], $rows);
+    }
+
+    public function relatedPostCategories()
+    {
+        $db = Database::db();
+        $rows = $db->fetchAll($db->select('mid', 'name')
+            ->from('table.metas')
+            ->where('type = ?', 'category')
+            ->order('order', 'ASC')
+            ->order('name', 'ASC'));
+
+        $categories = [];
+        foreach ($rows as $row) {
+            $categories[] = [
+                'mid' => (int) $row['mid'],
+                'name' => isset($row['name']) ? (string) $row['name'] : '',
+            ];
+        }
+
+        return $categories;
+    }
+
+    public function nextSortOrder()
+    {
+        $db = Database::db();
+        $row = $db->fetchRow($db->select('sort_order')
+            ->from('table.mediashelf_works')
+            ->order('sort_order', 'DESC')
+            ->limit(1));
+
+        return max(1, (int) (isset($row['sort_order']) ? $row['sort_order'] : 0) + 1);
+    }
+
     public function findById($id)
     {
         $db = Database::db();
@@ -220,7 +307,7 @@ class WorkRepository
             'external_ids_json' => json_encode($externalIds, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             'favorite_level' => 'normal',
             'tags' => $this->listToText(isset($source['tags']) ? $source['tags'] : []),
-            'sort_order' => 0,
+            'sort_order' => $this->nextSortOrder(),
             'status' => 'draft',
         ];
 
@@ -331,7 +418,7 @@ class WorkRepository
             'source_payload_json' => null,
             'favorite_level' => 'normal',
             'tags_json' => '[]',
-            'sort_order' => 0,
+            'sort_order' => $this->nextSortOrder(),
             'status' => 'draft',
         ];
     }
@@ -559,6 +646,52 @@ class WorkRepository
         }
 
         return $text;
+    }
+
+    private function selectedRelatedPostOnly($cid)
+    {
+        $row = $this->contentRow((int) $cid);
+        return $row ? [$row] : [];
+    }
+
+    private function contentRow($cid)
+    {
+        if ($cid <= 0) {
+            return null;
+        }
+
+        $db = Database::db();
+        $row = $db->fetchRow($db->select('cid', 'title', 'slug', 'type', 'text', 'created')
+            ->from('table.contents')
+            ->where('cid = ?', $cid)
+            ->where('status = ?', 'publish')
+            ->where('type IN ?', ['post', 'page'])
+            ->limit(1));
+
+        return $row ?: null;
+    }
+
+    private function rowListHasCid(array $rows, $cid)
+    {
+        foreach ($rows as $row) {
+            if ((int) $row['cid'] === (int) $cid) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function relatedPostOption(array $row)
+    {
+        return [
+            'cid' => (int) $row['cid'],
+            'title' => isset($row['title']) ? (string) $row['title'] : '',
+            'type' => isset($row['type']) ? (string) $row['type'] : '',
+            'created' => (int) (isset($row['created']) ? $row['created'] : 0),
+            'url' => $this->contentPermalink($row),
+            'excerpt' => $this->contentExcerpt(isset($row['text']) ? (string) $row['text'] : ''),
+        ];
     }
 
     private function objectJson($value)
