@@ -507,6 +507,10 @@ class Renderer
                 if (!empty($options->pluginUrl)) {
                     return \Typecho\Common::url('MediaShelf/' . ltrim($path, '/'), $options->pluginUrl);
                 }
+
+                if (!empty($options->siteUrl)) {
+                    return \Typecho\Common::url('usr/plugins/MediaShelf/' . ltrim($path, '/'), $options->siteUrl);
+                }
             }
         } catch (\Throwable $e) {
             return '';
