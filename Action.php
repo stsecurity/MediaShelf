@@ -17,11 +17,12 @@ class Action extends Archive
 
     public function renderDetail()
     {
-        $this->renderThemePage(Lib\Renderer::renderDetail((string) $this->request->get('slug', '')), $this->pageTitle());
+        $this->renderThemePage(Lib\Renderer::renderDetail($this->detailSlug()), $this->pageTitle());
     }
 
     private function renderThemePage($content, $title)
     {
+        $this->prepareThemeArchive($title, $content);
         if (method_exists($this, 'setArchiveTitle')) {
             $this->setArchiveTitle($title);
         }
@@ -51,6 +52,36 @@ class Action extends Archive
             echo '</main>';
         }
         $this->need('footer.php');
+    }
+
+    private function prepareThemeArchive($title, $content)
+    {
+        $created = time();
+        $slug = 'mediashelf';
+        $path = $this->requestPath();
+
+        $this->push([
+            'cid' => 0,
+            'title' => $title,
+            'slug' => $slug,
+            'created' => $created,
+            'modified' => $created,
+            'text' => $content,
+            'order' => 0,
+            'authorId' => $this->authorId(),
+            'template' => '',
+            'type' => 'page',
+            'status' => 'publish',
+            'password' => '',
+            'commentsNum' => 0,
+            'allowComment' => 0,
+            'allowPing' => 0,
+            'allowFeed' => 0,
+            'parent' => 0,
+            'pathinfo' => $path,
+            'path' => $path,
+            'permalink' => $this->absoluteUrl($path),
+        ]);
     }
 
     private function openMaterialThemeFrame()
@@ -95,6 +126,53 @@ class Action extends Archive
         } catch (\Throwable $e) {
             return '';
         }
+    }
+
+    private function requestPath()
+    {
+        try {
+            $path = (string) $this->request->getPathInfo();
+            return $path !== '' ? $path : '/works';
+        } catch (\Throwable $e) {
+            return '/works';
+        }
+    }
+
+    private function detailSlug()
+    {
+        $slug = (string) $this->request->get('slug', '');
+        if ($slug !== '') {
+            return $slug;
+        }
+
+        $parts = array_values(array_filter(explode('/', trim($this->requestPath(), '/')), function ($part) {
+            return $part !== '';
+        }));
+
+        return count($parts) >= 2 ? (string) end($parts) : '';
+    }
+
+    private function absoluteUrl($path)
+    {
+        try {
+            $siteUrl = rtrim((string) $this->options->siteUrl, '/');
+            return $siteUrl . '/' . ltrim((string) $path, '/');
+        } catch (\Throwable $e) {
+            return (string) $path;
+        }
+    }
+
+    private function authorId()
+    {
+        try {
+            if (isset($this->user->uid)) {
+                return (int) $this->user->uid;
+            }
+        } catch (\Throwable $e) {
+            return 1;
+        }
+
+        return 1;
     }
 
     private function themeFileExists($file)
