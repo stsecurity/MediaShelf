@@ -343,11 +343,13 @@ class WorkRepository
     public function update($id, array $input)
     {
         $id = (int) $id;
-        if (!$this->findById($id)) {
+        $existing = $this->findById($id);
+        if (!$existing) {
             throw new \InvalidArgumentException('Work not found.');
         }
 
         $data = $this->validate($input);
+        $data['source_payload_json'] = isset($existing['source_payload_json']) ? $existing['source_payload_json'] : null;
         $data['updated_at'] = time();
 
         $this->assertSlugAvailable($data['slug'], $id);
@@ -740,8 +742,12 @@ class WorkRepository
             throw new \InvalidArgumentException('External IDs must be a valid JSON object.');
         }
 
-        if (array_values($decoded) === $decoded) {
+        if ($decoded && array_values($decoded) === $decoded) {
             throw new \InvalidArgumentException('External IDs must be a JSON object, not a list.');
+        }
+
+        if (!$decoded) {
+            return '{}';
         }
 
         return json_encode($decoded, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
