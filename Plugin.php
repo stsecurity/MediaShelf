@@ -27,6 +27,7 @@ class Plugin implements PluginInterface
     public static function activate()
     {
         try {
+            self::registerContentHooks();
             Lib\Database::install();
             self::addPublicRoute();
             self::addAdminPanels();
@@ -101,6 +102,47 @@ class Plugin implements PluginInterface
     public static function getWorksHtml(array $filters = [])
     {
         return Lib\Renderer::renderShelf($filters);
+    }
+
+    public static function contentEx($content, $widget)
+    {
+        return self::renderShortcodes((string) $content);
+    }
+
+    public static function renderShortcodes($content)
+    {
+        $content = (string) $content;
+        $map = [
+            'mediashelf_title' => [Lib\Renderer::class, 'renderTitleComponent'],
+            'mediashelf_search' => [Lib\Renderer::class, 'renderSearchComponent'],
+            'mediashelf_cards' => [Lib\Renderer::class, 'renderCardsComponent'],
+        ];
+
+        foreach ($map as $shortcode => $callback) {
+            $pattern = self::shortcodePattern($shortcode);
+            $content = preg_replace_callback($pattern, function () use ($callback) {
+                return call_user_func($callback);
+            }, $content);
+        }
+
+        $content = preg_replace_callback(self::shortcodePattern('mediashelf'), function () {
+            return Lib\Renderer::renderComponentShelf();
+        }, $content);
+
+        return $content;
+    }
+
+    private static function registerContentHooks()
+    {
+        if (class_exists('\Typecho\Plugin')) {
+            \Typecho\Plugin::factory('Widget\Base\Contents')->contentEx = [__CLASS__, 'contentEx'];
+        }
+    }
+
+    private static function shortcodePattern($name)
+    {
+        $name = preg_quote($name, '#');
+        return '#(?:<p>\s*)?\[' . $name . '\](?:\s*</p>)?#i';
     }
 
     private static function addPublicRoute($slug = null)

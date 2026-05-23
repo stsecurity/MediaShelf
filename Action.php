@@ -38,26 +38,32 @@ class Action extends Archive
             return;
         }
 
-        if ($this->themeFileExists('page.php')) {
-            $this->need('page.php');
-            return;
-        }
-
         $this->need('header.php');
-        echo '<main class="mediashelf-theme-page" id="main" role="main">';
-        echo $content;
-        echo '</main>';
+        if ($this->themeName() === 'material') {
+            $this->openMaterialThemeFrame();
+            echo $content;
+            $this->closeMaterialThemeFrame();
+            if ($this->themeFileExists('sidebar.php')) {
+                $this->need('sidebar.php');
+            }
+        } else {
+            echo '<main class="mediashelf-theme-page" id="main" role="main">';
+            echo $content;
+            echo '</main>';
+        }
         $this->need('footer.php');
     }
 
     private function prepareThemeArchive($title, $content)
     {
         $created = time();
+        $slug = 'mediashelf';
         $path = $this->requestPath();
-        $row = $this->filter([
+
+        $this->push([
             'cid' => 0,
             'title' => $title,
-            'slug' => 'mediashelf',
+            'slug' => $slug,
             'created' => $created,
             'modified' => $created,
             'text' => $content,
@@ -72,16 +78,29 @@ class Action extends Archive
             'allowPing' => 0,
             'allowFeed' => 0,
             'parent' => 0,
+            'pathinfo' => $path,
+            'path' => $path,
+            'permalink' => $this->absoluteUrl($path),
         ]);
+    }
 
-        $row['pathinfo'] = $path;
-        $row['path'] = $path;
-        $row['url'] = $row['permalink'] = $this->absoluteUrl($path);
+    private function openMaterialThemeFrame()
+    {
+        echo '<div class="material-layout mdl-js-layout has-drawer is-upgraded">';
+        echo '<main class="material-layout__content" id="main">';
+        echo '<div class="min-height-for-footer">';
+        echo '<div id="top"></div>';
+        echo '<button class="MD-burger-icon sidebar-toggle">';
+        echo '<span id="MD-burger-id" class="MD-burger-layer"></span>';
+        echo '</button>';
+        echo '<div class="mediashelf-theme-page mediashelf-theme-page--material">';
+    }
 
-        $this->push($row);
-        $this->pathinfo = $path;
-        $this->path = $path;
-        $this->url = $this->permalink = $row['permalink'];
+    private function closeMaterialThemeFrame()
+    {
+        echo '</div>';
+        echo '</div>';
+        echo '</main>';
     }
 
     private function pageTitle()

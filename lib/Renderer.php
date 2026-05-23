@@ -93,6 +93,75 @@ class Renderer
         return $html;
     }
 
+    public static function renderComponentShelf(array $filters = [])
+    {
+        return self::renderTitleComponent()
+            . self::renderSearchComponent($filters)
+            . self::renderCardsComponent($filters);
+    }
+
+    public static function renderTitleComponent()
+    {
+        $eyebrow = self::pageText('shelfEyebrow', 'Personal Collection');
+        $title = self::pageText('shelfTitle', 'Media Shelf');
+        $summary = self::pageText('shelfSummary', 'A collection for works I like.');
+
+        $html = '<section class="mediashelf mediashelf--component mediashelf--title" aria-labelledby="mediashelf-component-title">';
+        $html .= self::assets();
+        $html .= '<div class="mediashelf__inner">';
+        $html .= '<header class="mediashelf__header">';
+        $html .= '<p class="mediashelf__eyebrow">' . self::h($eyebrow) . '</p>';
+        $html .= '<h1 id="mediashelf-component-title">' . self::h($title) . '</h1>';
+        $html .= '<p class="mediashelf__summary">' . self::h($summary) . '</p>';
+        $html .= '</header>';
+        $html .= '</div>';
+        $html .= '</section>';
+
+        return $html;
+    }
+
+    public static function renderSearchComponent(array $filters = [])
+    {
+        $repository = new WorkRepository();
+        $filters = self::requestFilters($filters);
+        $facets = $repository->publicFacets();
+
+        $html = '<section class="mediashelf mediashelf--component mediashelf--search" aria-label="Media Shelf filters">';
+        $html .= self::assets();
+        $html .= '<div class="mediashelf__inner">';
+        $html .= self::filters($filters, $facets);
+        $html .= '</div>';
+        $html .= '</section>';
+
+        return $html;
+    }
+
+    public static function renderCardsComponent(array $filters = [])
+    {
+        $repository = new WorkRepository();
+        $filters = self::requestFilters($filters);
+        $limit = self::itemsPerPage();
+        $works = $repository->findPublished($filters, $limit);
+        $display = self::displayOptions();
+
+        $html = '<section class="mediashelf mediashelf--component mediashelf--cards" aria-label="Media Shelf works">';
+        $html .= self::assets();
+        $html .= '<div class="mediashelf__inner">';
+        if (!$works) {
+            $html .= '<p class="mediashelf__empty">No published works match these filters yet.</p>';
+        } else {
+            $html .= '<div class="mediashelf__grid">';
+            foreach ($works as $work) {
+                $html .= self::card($work, $repository, $display);
+            }
+            $html .= '</div>';
+        }
+        $html .= '</div>';
+        $html .= '</section>';
+
+        return $html;
+    }
+
     private static function requestFilters(array $filters)
     {
         foreach (['category', 'tag', 'search'] as $key) {

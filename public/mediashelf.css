@@ -10,6 +10,20 @@
     box-sizing: border-box;
 }
 
+.mediashelf--component {
+    background: transparent;
+    min-height: 0;
+    padding: 0;
+}
+
+.mediashelf--component + .mediashelf--component {
+    margin-top: 24px;
+}
+
+.mediashelf--component .mediashelf__inner {
+    max-width: none;
+}
+
 .mediashelf__inner {
     max-width: 1180px;
     margin: 0 auto;
