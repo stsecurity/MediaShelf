@@ -167,6 +167,7 @@ class WorkRepository
         $type = isset($filters['type']) ? (string) $filters['type'] : 'post';
         $category = isset($filters['category']) ? (int) $filters['category'] : 0;
         $search = trim((string) (isset($filters['search']) ? $filters['search'] : ''));
+        $published = isset($filters['published']) ? (string) $filters['published'] : 'all';
 
         if (!in_array($type, ['post', 'page', 'all'], true)) {
             $type = 'post';
@@ -198,6 +199,11 @@ class WorkRepository
 
         if ($search !== '') {
             $select->where('title LIKE ?', '%' . $search . '%');
+        }
+
+        $publishedAfter = $this->relatedPublishedAfter($published);
+        if ($publishedAfter > 0) {
+            $select->where('created >= ?', $publishedAfter);
         }
 
         if ($cids) {
@@ -235,6 +241,17 @@ class WorkRepository
         }
 
         return $categories;
+    }
+
+    public function relatedPublishedOptions()
+    {
+        return [
+            'all' => 'Any time',
+            '30_days' => 'Last 30 days',
+            '90_days' => 'Last 90 days',
+            '1_year' => 'Last year',
+            'this_year' => 'This year',
+        ];
     }
 
     public function nextSortOrder()
@@ -692,6 +709,23 @@ class WorkRepository
             'url' => $this->contentPermalink($row),
             'excerpt' => $this->contentExcerpt(isset($row['text']) ? (string) $row['text'] : ''),
         ];
+    }
+
+    private function relatedPublishedAfter($published)
+    {
+        switch ((string) $published) {
+            case '30_days':
+                return time() - 30 * 86400;
+            case '90_days':
+                return time() - 90 * 86400;
+            case '1_year':
+                return time() - 365 * 86400;
+            case 'this_year':
+                return strtotime(date('Y-01-01 00:00:00')) ?: 0;
+            case 'all':
+            default:
+                return 0;
+        }
     }
 
     private function objectJson($value)

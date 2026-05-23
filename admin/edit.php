@@ -77,13 +77,25 @@ $listUrl = Admin::panelUrl('MediaShelf/admin/list.php');
 $relatedFilters = [
     'type' => (string) Admin::query('post_type', 'post'),
     'category' => (int) Admin::query('post_category', 0),
+    'published' => (string) Admin::query('post_published', 'all'),
     'search' => trim((string) Admin::query('post_search', '')),
 ];
 $selectedPostCid = (int) mediashelf_edit_field($work, 'blog_cid', 0);
+if ((string) Admin::query('mediashelf_related_ajax', '') === '1') {
+    $selectedPostCid = (int) Admin::query('selected_cid', $selectedPostCid);
+}
 $relatedPosts = $repository->relatedPostOptions($relatedFilters, $selectedPostCid);
 $relatedCategories = $repository->relatedPostCategories();
+$relatedPublishedOptions = $repository->relatedPublishedOptions();
 $selectedPostPreview = $repository->blogPreview($selectedPostCid);
 $relatedFilterBaseUrl = Admin::panelUrl('MediaShelf/admin/edit.php', $isEdit ? ['id' => $id] : []);
+
+if ((string) Admin::query('mediashelf_related_ajax', '') === '1') {
+    mediashelf_edit_json_response([
+        'posts' => $relatedPosts,
+        'selected_cid' => $selectedPostCid,
+    ]);
+}
 
 function mediashelf_edit_work_from_post($id)
 {
@@ -137,6 +149,16 @@ function mediashelf_edit_json_object($json)
     }
 
     return json_encode($decoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+}
+
+function mediashelf_edit_json_response(array $data)
+{
+    if (!headers_sent()) {
+        header('Content-Type: application/json; charset=UTF-8');
+    }
+
+    echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
 }
 
 include 'header.php';
@@ -201,7 +223,7 @@ include 'menu.php';
     align-items: end;
     display: grid;
     gap: 10px;
-    grid-template-columns: 140px 180px minmax(180px, 1fr) auto auto;
+    grid-template-columns: 130px 170px 150px minmax(170px, 1fr) auto;
     margin: 0 0 10px;
 }
 
@@ -333,7 +355,7 @@ include 'menu.php';
                     <label class="typecho-label" for="blog_cid">Related Typecho Post</label>
                     <div class="mediashelf-related-filters" data-filter-base="<?php echo Admin::h($relatedFilterBaseUrl); ?>">
                         <label>
-                            Archive
+                            Post Type
                             <select id="post_type_filter">
                                 <option value="post" <?php if ($relatedFilters['type'] === 'post') echo 'selected'; ?>>Posts</option>
                                 <option value="page" <?php if ($relatedFilters['type'] === 'page') echo 'selected'; ?>>Pages</option>
@@ -352,10 +374,19 @@ include 'menu.php';
                             </select>
                         </label>
                         <label>
+                            Published Time
+                            <select id="post_published_filter">
+                                <?php foreach ($relatedPublishedOptions as $value => $label): ?>
+                                    <option value="<?php echo Admin::h($value); ?>" <?php if ($relatedFilters['published'] === $value) echo 'selected'; ?>>
+                                        <?php echo Admin::h($label); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </label>
+                        <label>
                             Search title
                             <input id="post_search_filter" type="search" class="text" value="<?php echo Admin::h($relatedFilters['search']); ?>" />
                         </label>
-                        <button type="button" class="btn primary" id="mediashelf_post_filter">Filter</button>
                         <button type="button" class="btn" id="mediashelf_post_filter_reset">Reset</button>
                     </div>
                     <select id="blog_cid" name="blog_cid" class="mediashelf-related-select">
@@ -428,21 +459,31 @@ include 'common-js.php';
 ?>
 <script>
 (function () {
-    var filterButton = document.getElementById('mediashelf_post_filter');
     var resetButton = document.getElementById('mediashelf_post_filter_reset');
     var filterWrap = document.querySelector('.mediashelf-related-filters');
     var select = document.getElementById('blog_cid');
     var preview = document.getElementById('mediashelf_related_preview');
+    var typeFilter = document.getElementById('post_type_filter');
+    var categoryFilter = document.getElementById('post_category_filter');
+    var publishedFilter = document.getElementById('post_published_filter');
+    var searchFilter = document.getElementById('post_search_filter');
+    var searchTimer = null;
 
     function filterUrl(reset) {
         var url = new URL(filterWrap.getAttribute('data-filter-base'), window.location.href);
         if (!reset) {
-            url.searchParams.set('post_type', document.getElementById('post_type_filter').value);
-            url.searchParams.set('post_category', document.getElementById('post_category_filter').value);
-            url.searchParams.set('post_search', document.getElementById('post_search_filter').value);
+            url.searchParams.set('mediashelf_related_ajax', '1');
+            url.searchParams.set('selected_cid', select.value || '');
+            url.searchParams.set('post_type', typeFilter.value);
+            url.searchParams.set('post_category', categoryFilter.value);
+            url.searchParams.set('post_published', publishedFilter.value);
+            url.searchParams.set('post_search', searchFilter.value);
         } else {
+            url.searchParams.set('mediashelf_related_ajax', '1');
+            url.searchParams.set('selected_cid', select.value || '');
             url.searchParams.delete('post_type');
             url.searchParams.delete('post_category');
+            url.searchParams.delete('post_published');
             url.searchParams.delete('post_search');
         }
 
@@ -451,6 +492,98 @@ include 'common-js.php';
 
     function text(value) {
         return value || '';
+    }
+
+    function postLabel(post) {
+        return '#' + post.cid + ' [' + post.type + '] ' + post.title;
+    }
+
+    function setOptionData(option, post) {
+        option.setAttribute('data-title', text(post.title));
+        option.setAttribute('data-type', text(post.type));
+        option.setAttribute('data-created', post.created ? formatDate(post.created) : '');
+        option.setAttribute('data-url', text(post.url));
+        option.setAttribute('data-excerpt', text(post.excerpt));
+    }
+
+    function formatDate(timestamp) {
+        var date = new Date(parseInt(timestamp, 10) * 1000);
+        if (isNaN(date.getTime())) {
+            return '';
+        }
+
+        return [
+            date.getFullYear(),
+            padDate(date.getMonth() + 1),
+            padDate(date.getDate())
+        ].join('-');
+    }
+
+    function padDate(value) {
+        value = String(value);
+        return value.length < 2 ? '0' + value : value;
+    }
+
+    function replaceOptions(posts, selectedCid) {
+        var currentValue = selectedCid || select.value;
+        select.innerHTML = '';
+
+        var empty = document.createElement('option');
+        empty.value = '';
+        empty.textContent = 'No related post';
+        select.appendChild(empty);
+
+        posts.forEach(function (post) {
+            var option = document.createElement('option');
+            option.value = String(post.cid);
+            option.textContent = postLabel(post);
+            setOptionData(option, post);
+            if (String(post.cid) === String(currentValue)) {
+                option.selected = true;
+            }
+            select.appendChild(option);
+        });
+
+        if (currentValue && select.value !== String(currentValue)) {
+            select.value = '';
+        }
+
+        renderPreview();
+    }
+
+    function refreshOptions(reset) {
+        if (!filterWrap || !select) {
+            return;
+        }
+
+        var request = new XMLHttpRequest();
+        request.open('GET', filterUrl(reset), true);
+        request.onreadystatechange = function () {
+            if (request.readyState !== 4) {
+                return;
+            }
+
+            if (request.status < 200 || request.status >= 300) {
+                return;
+            }
+
+            try {
+                var data = JSON.parse(request.responseText);
+                replaceOptions(data.posts || [], data.selected_cid || '');
+            } catch (e) {
+            }
+        };
+        request.send();
+    }
+
+    function debounceSearch() {
+        if (searchTimer) {
+            window.clearTimeout(searchTimer);
+        }
+
+        searchTimer = window.setTimeout(function () {
+            refreshOptions(false);
+        }, 350);
     }
 
     function renderPreview() {
@@ -500,15 +633,35 @@ include 'common-js.php';
         }
     }
 
-    if (filterButton && filterWrap) {
-        filterButton.addEventListener('click', function () {
-            window.location.href = filterUrl(false);
+    if (typeFilter) {
+        typeFilter.addEventListener('change', function () {
+            refreshOptions(false);
         });
+    }
+
+    if (categoryFilter) {
+        categoryFilter.addEventListener('change', function () {
+            refreshOptions(false);
+        });
+    }
+
+    if (publishedFilter) {
+        publishedFilter.addEventListener('change', function () {
+            refreshOptions(false);
+        });
+    }
+
+    if (searchFilter) {
+        searchFilter.addEventListener('input', debounceSearch);
     }
 
     if (resetButton && filterWrap) {
         resetButton.addEventListener('click', function () {
-            window.location.href = filterUrl(true);
+            typeFilter.value = 'post';
+            categoryFilter.value = '0';
+            publishedFilter.value = 'all';
+            searchFilter.value = '';
+            refreshOptions(true);
         });
     }
 
