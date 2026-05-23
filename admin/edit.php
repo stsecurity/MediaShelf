@@ -1,6 +1,7 @@
 <?php
 
 use TypechoPlugin\MediaShelf\Lib\Admin;
+use TypechoPlugin\MediaShelf\Lib\ContentHooks;
 use TypechoPlugin\MediaShelf\Lib\WorkRepository;
 
 if (!defined('__TYPECHO_ADMIN__')) {
@@ -10,8 +11,10 @@ if (!defined('__TYPECHO_ADMIN__')) {
 require_once dirname(__DIR__) . '/lib/Database.php';
 require_once dirname(__DIR__) . '/lib/WorkRepository.php';
 require_once dirname(__DIR__) . '/lib/Admin.php';
+require_once dirname(__DIR__) . '/lib/ContentHooks.php';
 
 Admin::requireAdministrator();
+ContentHooks::persist();
 
 $repository = new WorkRepository();
 $id = (int) Admin::query('id', 0);

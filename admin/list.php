@@ -2,6 +2,7 @@
 
 use TypechoPlugin\MediaShelf\Lib\WorkRepository;
 use TypechoPlugin\MediaShelf\Lib\Admin;
+use TypechoPlugin\MediaShelf\Lib\ContentHooks;
 
 if (!defined('__TYPECHO_ADMIN__')) {
     exit;
@@ -10,8 +11,10 @@ if (!defined('__TYPECHO_ADMIN__')) {
 require_once dirname(__DIR__) . '/lib/Database.php';
 require_once dirname(__DIR__) . '/lib/WorkRepository.php';
 require_once dirname(__DIR__) . '/lib/Admin.php';
+require_once dirname(__DIR__) . '/lib/ContentHooks.php';
 
 Admin::requireAdministrator();
+ContentHooks::persist();
 
 $filters = [
     'search' => trim((string) Admin::query('search', '')),

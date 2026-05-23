@@ -12,6 +12,7 @@ require_once __DIR__ . '/lib/HttpClient.php';
 require_once __DIR__ . '/lib/ProviderRegistry.php';
 require_once __DIR__ . '/lib/Admin.php';
 require_once __DIR__ . '/lib/Renderer.php';
+require_once __DIR__ . '/lib/ContentHooks.php';
 require_once __DIR__ . '/Action.php';
 
 /**
@@ -48,6 +49,7 @@ class Plugin implements PluginInterface
 
     public static function config($form)
     {
+        Lib\ContentHooks::persist();
         self::addSettingsLayout($form);
         self::addTextInput($form, 'publicSlug', 'works', 'Public page slug', 'Default: works');
         self::addTextInput($form, 'itemsPerPage', '24', 'Items per page', 'Default: 24');
@@ -84,6 +86,7 @@ class Plugin implements PluginInterface
 
     public static function configHandle($settings, $isInit)
     {
+        Lib\ContentHooks::persist();
         $settings = self::normalizeConfigSettings(is_array($settings) ? $settings : []);
 
         if (class_exists('\Utils\Helper')) {
@@ -134,9 +137,7 @@ class Plugin implements PluginInterface
 
     private static function registerContentHooks()
     {
-        if (class_exists('\Typecho\Plugin')) {
-            \Typecho\Plugin::factory('Widget\Base\Contents')->contentEx = [__CLASS__, 'contentEx'];
-        }
+        Lib\ContentHooks::registerRuntime([__CLASS__, 'contentEx']);
     }
 
     private static function shortcodePattern($name)

@@ -7,16 +7,19 @@ use Widget\Archive;
 require_once __DIR__ . '/lib/Database.php';
 require_once __DIR__ . '/lib/WorkRepository.php';
 require_once __DIR__ . '/lib/Renderer.php';
+require_once __DIR__ . '/lib/ContentHooks.php';
 
 class Action extends Archive
 {
     public function render()
     {
+        Lib\ContentHooks::persist();
         $this->renderThemePage(Lib\Renderer::renderShelf(), $this->pageTitle());
     }
 
     public function renderDetail()
     {
+        Lib\ContentHooks::persist();
         $this->renderThemePage(Lib\Renderer::renderDetail($this->detailSlug()), $this->pageTitle());
     }
 
