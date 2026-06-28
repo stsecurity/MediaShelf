@@ -28,6 +28,7 @@ $error = '';
 $message = (string) Admin::query('message', '');
 $messageText = '';
 $repository = new WorkRepository();
+$isManualSort = $filters['sort'] === 'sort_order';
 
 if ($message === 'saved') {
     $messageText = 'Work saved.';
@@ -50,6 +51,9 @@ if (Admin::isPost()) {
             $repository->updateStatus((int) Admin::post('id', 0), (string) Admin::post('status', 'draft'));
             Admin::redirect(Admin::panelUrl('MediaShelf/admin/list.php', ['message' => 'status']));
         } elseif ($action === 'sort') {
+            if ((string) Admin::post('sort_mode', '') !== 'sort_order') {
+                throw new InvalidArgumentException('Manual sort is only available when sorting by manual order.');
+            }
             $repository->updateSortOrders(mediashelf_list_ids_from_order(Admin::post('order', '')));
             Admin::redirect(Admin::panelUrl('MediaShelf/admin/list.php', [
                 'sort' => 'sort_order',
@@ -327,9 +331,11 @@ include 'menu.php';
                         </tr>
                     <?php else: ?>
                         <?php foreach ($works as $work): ?>
-                            <tr class="mediashelf-sort-row" draggable="true" data-work-id="<?php echo Admin::h((int) $work['id']); ?>">
+                            <tr class="mediashelf-sort-row" <?php if ($isManualSort) echo 'draggable="true"'; ?> data-work-id="<?php echo Admin::h((int) $work['id']); ?>">
                                 <td class="mediashelf-work-title">
-                                    <span class="mediashelf-drag-handle" title="Drag to sort" aria-hidden="true">::</span>
+                                    <?php if ($isManualSort): ?>
+                                        <span class="mediashelf-drag-handle" title="Drag to sort" aria-hidden="true">::</span>
+                                    <?php endif; ?>
                                     <strong><?php echo Admin::h(isset($work['title']) ? $work['title'] : 'Untitled'); ?></strong>
                                     <?php if (!empty($work['slug'])): ?>
                                         <br><small><?php echo Admin::h($work['slug']); ?></small>
@@ -373,9 +379,10 @@ include 'menu.php';
             </table>
         </div>
 
-        <?php if ($works): ?>
+        <?php if ($works && $isManualSort): ?>
             <form id="mediashelf-sort-form" method="post" action="<?php echo Admin::h(Admin::tokenUrl($listUrl)); ?>">
                 <input type="hidden" name="mediashelf_action" value="sort" />
+                <input type="hidden" name="sort_mode" value="sort_order" />
                 <input type="hidden" name="order" id="mediashelf-sort-order" value="" />
             </form>
         <?php endif; ?>
